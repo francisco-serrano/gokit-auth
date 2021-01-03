@@ -15,11 +15,25 @@ func main() {
 	userHandler := http.NewServer(
 		transport.MakeHealthEndpoint(svc),
 		transport.DecodeRequest,
-		transport.EncodeResponse,
+		transport.EncodeResponseJSON,
+	)
+
+	templateHandler := http.NewServer(
+		transport.MakeTemplateEndpoint(svc),
+		transport.DecodeRequest,
+		transport.EncodeResponseTemplate,
+	)
+
+	registerHandler := http.NewServer(
+		transport.MakeRegisterEndpoint(svc),
+		transport.DecodeRegisterRequest,
+		transport.EncodeResponseString,
 	)
 
 	app := fiber.New()
 	app.Get("/health", adaptor.HTTPHandler(userHandler))
+	app.Get("/", adaptor.HTTPHandler(templateHandler))
+	app.Post("/register", adaptor.HTTPHandler(registerHandler))
 
 	if err := app.Listen(":8080"); err != nil {
 		log.Fatal(err)
