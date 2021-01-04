@@ -26,14 +26,21 @@ func main() {
 
 	registerHandler := http.NewServer(
 		transport.MakeRegisterEndpoint(svc),
-		transport.DecodeRegisterRequest,
+		transport.DecodeLoginRegisterRequest,
 		transport.EncodeResponseString,
+	)
+
+	loginHandler := http.NewServer(
+		transport.MakeLoginEndpoint(svc),
+		transport.DecodeLoginRegisterRequest,
+		transport.EncodeResponseTemplate,
 	)
 
 	app := fiber.New()
 	app.Get("/health", adaptor.HTTPHandler(userHandler))
 	app.Get("/", adaptor.HTTPHandler(templateHandler))
 	app.Post("/register", adaptor.HTTPHandler(registerHandler))
+	app.Post("/login", adaptor.HTTPHandler(loginHandler))
 
 	if err := app.Listen(":8080"); err != nil {
 		log.Fatal(err)

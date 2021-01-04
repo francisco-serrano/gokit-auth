@@ -18,7 +18,7 @@ type healthCheckResponse struct {
 	Message string `json:"message"`
 }
 
-type registerRequest struct {
+type loginRegisterRequest struct {
 	User string
 	Pass string
 }
@@ -31,23 +31,34 @@ func MakeHealthEndpoint(svc service.UserService) endpoint.Endpoint {
 
 func MakeTemplateEndpoint(svc service.UserService) endpoint.Endpoint {
 	return func(_ context.Context, _ interface{}) (interface{}, error) {
-		return svc.SendTemplateData()
+		return svc.SendMainTemplateData(), nil
 	}
 }
 
 func MakeRegisterEndpoint(svc service.UserService) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
-		userData, ok := request.(registerRequest)
+		userData, ok := request.(loginRegisterRequest)
 		if !ok {
 			return nil, fmt.Errorf("erorr while casting to register request: %T", request)
 		}
 
-		token, err := svc.Register(userData.User, userData.Pass)
+		response, err := svc.Register(userData.User, userData.Pass)
 		if err != nil {
 			return nil, fmt.Errorf("error while registering email: %w", err)
 		}
 
-		return token, nil
+		return response, nil
+	}
+}
+
+func MakeLoginEndpoint(svc service.UserService) endpoint.Endpoint {
+	return func(_ context.Context, request interface{}) (interface{}, error) {
+		userData, ok := request.(loginRegisterRequest)
+		if !ok {
+			return nil, fmt.Errorf("erorr while casting to register request: %T", request)
+		}
+
+		return svc.Login(userData.User, userData.Pass), nil
 	}
 }
 
@@ -60,7 +71,7 @@ func DecodeRequest(_ context.Context, r *http.Request) (interface{}, error) {
 	return c, nil
 }
 
-func DecodeRegisterRequest(_ context.Context, r *http.Request) (interface{}, error) {
+func DecodeLoginRegisterRequest(_ context.Context, r *http.Request) (interface{}, error) {
 	user := r.FormValue("user")
 	if strings.TrimSpace(user) == "" {
 		return nil, fmt.Errorf("cannot register an empty user")
@@ -71,7 +82,7 @@ func DecodeRegisterRequest(_ context.Context, r *http.Request) (interface{}, err
 		return nil, fmt.Errorf("cannot register an empty password")
 	}
 
-	return registerRequest{
+	return loginRegisterRequest{
 		User: user,
 		Pass: pass,
 	}, nil

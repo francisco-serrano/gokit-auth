@@ -5,12 +5,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const MainTemplate = "main.gohtml"
 const LoginTemplate = "login.gohtml"
 
 type UserService interface {
 	HealthCheck() string
-	SendTemplateData() (TemplateRender, error)
+	SendMainTemplateData() TemplateRender
 	Register(user, pass string) (string, error)
+	Login(user, pass string) TemplateRender
 }
 
 type userService struct {
@@ -27,7 +29,9 @@ type TemplateMetadata struct {
 }
 
 type TemplateVariables struct {
-	Name        string
+	Name         string
+	LoginMessage string
+	ErrorMessage error
 }
 
 func NewUserService() UserService {
@@ -38,20 +42,71 @@ func (u userService) HealthCheck() string {
 	return "ok"
 }
 
-func (u userService) SendTemplateData() (TemplateRender, error) {
+func (u userService) SendMainTemplateData() TemplateRender {
 	return TemplateRender{
-		Metadata:  TemplateMetadata{Name: LoginTemplate},
-		Variables: TemplateVariables{Name: "USER"},
-	}, nil
+		Metadata:  TemplateMetadata{Name: MainTemplate},
+		Variables: TemplateVariables{},
+	}
 }
 
 func (u *userService) Register(user, pass string) (string, error) {
-	hashedPass, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+	if _, ok := u.users[user]; ok {
+		return "", fmt.Errorf("user already registered")
+	}
+
+	hashedPass, err := u.hashValue(pass)
 	if err != nil {
 		return "", fmt.Errorf("error while hashing pass: %w", err)
 	}
 
-	u.users[user] = string(hashedPass)
+	u.users[user] = hashedPass
 
-	return "USER SAVED", nil
+	return "REGISTER SUCCESSFUL", nil
+}
+
+func (u userService) Login(user, pass string) TemplateRender {
+	storedPass, ok := u.users[user]
+	if !ok {
+		return TemplateRender{
+			Metadata: TemplateMetadata{Name: LoginTemplate},
+			Variables: TemplateVariables{
+				Name:         user,
+				LoginMessage: "LOGIN FAILED",
+				ErrorMessage: fmt.Errorf("user not registered"),
+			},
+		}
+	}
+
+	if err := u.checkPasswordHash(pass, storedPass); err != nil {
+		return TemplateRender{
+			Metadata: TemplateMetadata{Name: LoginTemplate},
+			Variables: TemplateVariables{
+				Name:         user,
+				LoginMessage: "LOGIN FAILED",
+				ErrorMessage: fmt.Errorf("erorr while checking passwords: %w", err),
+			},
+		}
+	}
+
+	return TemplateRender{
+		Metadata: TemplateMetadata{Name: LoginTemplate},
+		Variables: TemplateVariables{
+			Name:         user,
+			LoginMessage: "LOGIN SUCCESSFUL",
+			ErrorMessage: nil,
+		},
+	}
+}
+
+func (u userService) hashValue(v string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(v), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	return string(hash), nil
+}
+
+func (u userService) checkPasswordHash(pass, hash string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pass))
 }

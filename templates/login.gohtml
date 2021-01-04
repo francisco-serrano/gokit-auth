@@ -1,9 +1,15 @@
-<h1>Hello {{.Name}}</h1>
+<h1>
+    {{if not .ErrorMessage}}
+        Welcome back {{.Name}}
+    {{else}}
+        Welcome to gokit-auth
+    {{end}}
+</h1>
 
-<span></span>
+<h3>{{.LoginMessage}}</h3>
 
-<form action="/register" method="post">
-    <input type="text" name="user"/>
-    <input type="password" name="pass"/>
-    <input type="submit"/>
-</form>
+<div>
+    {{if .ErrorMessage}}
+        {{.ErrorMessage}}
+    {{end}}
+</div>
