@@ -29,9 +29,19 @@ func MakeHealthEndpoint(svc service.UserService) endpoint.Endpoint {
 	}
 }
 
-func MakeTemplateEndpoint(svc service.UserService) endpoint.Endpoint {
-	return func(_ context.Context, _ interface{}) (interface{}, error) {
-		return svc.SendMainTemplateData(), nil
+func MakeMainEndpoint(svc service.UserService) endpoint.Endpoint {
+	return func(_ context.Context, request interface{}) (interface{}, error) {
+		c, ok := request.(*http.Cookie)
+		if !ok {
+			return nil, fmt.Errorf("could not obtain cookie from request: %T", request)
+		}
+
+		render, err := svc.SendMainTemplateData(c.Value)
+		if err != nil {
+			log.Print(fmt.Errorf("error while obtaining render: %w", err))
+		}
+
+		return render, nil
 	}
 }
 
@@ -39,7 +49,7 @@ func MakeRegisterEndpoint(svc service.UserService) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
 		userData, ok := request.(loginRegisterRequest)
 		if !ok {
-			return nil, fmt.Errorf("erorr while casting to register request: %T", request)
+			return nil, fmt.Errorf("error while casting to register request: %T", request)
 		}
 
 		response, err := svc.Register(userData.User, userData.Pass)
@@ -55,10 +65,19 @@ func MakeLoginEndpoint(svc service.UserService) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
 		userData, ok := request.(loginRegisterRequest)
 		if !ok {
-			return nil, fmt.Errorf("erorr while casting to register request: %T", request)
+			log.Print(fmt.Errorf("error while casting to register request: %T", request))
+
+			return "", nil
 		}
 
-		return svc.Login(userData.User, userData.Pass), nil
+		token, err := svc.Login(userData.User, userData.Pass)
+		if err != nil {
+			log.Print(fmt.Errorf("error during login: %w", err))
+
+			return "", nil
+		}
+
+		return token, nil
 	}
 }
 
@@ -103,7 +122,7 @@ func EncodeResponseString(_ context.Context, w http.ResponseWriter, _ interface{
 	return nil
 }
 
-func EncodeResponseTemplate(_ context.Context, w http.ResponseWriter, response interface{}) error {
+func SetMainResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
 	w.Header().Set("content-type", "text/html")
 
 	tr, ok := response.(service.TemplateRender)
@@ -124,6 +143,27 @@ func EncodeResponseTemplate(_ context.Context, w http.ResponseWriter, response i
 	if err := parsedTemplate.Execute(w, tr.Variables); err != nil {
 		return fmt.Errorf("error while executing template: %w", err)
 	}
+
+	return nil
+}
+
+func SetLoginResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+	token, ok := response.(string)
+	if !ok {
+		return fmt.Errorf("error while casting login response: %T", response)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:  "session",
+		Value: token,
+	})
+
+	r, err := http.NewRequest(http.MethodGet, "/", nil)
+	if err != nil {
+		return fmt.Errorf("error while creating request: %w", err)
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 
 	return nil
 }

@@ -18,10 +18,10 @@ func main() {
 		transport.EncodeResponseJSON,
 	)
 
-	templateHandler := http.NewServer(
-		transport.MakeTemplateEndpoint(svc),
+	mainHandler := http.NewServer(
+		transport.MakeMainEndpoint(svc),
 		transport.DecodeRequest,
-		transport.EncodeResponseTemplate,
+		transport.SetMainResponse,
 	)
 
 	registerHandler := http.NewServer(
@@ -33,12 +33,12 @@ func main() {
 	loginHandler := http.NewServer(
 		transport.MakeLoginEndpoint(svc),
 		transport.DecodeLoginRegisterRequest,
-		transport.EncodeResponseTemplate,
+		transport.SetLoginResponse,
 	)
 
 	app := fiber.New()
 	app.Get("/health", adaptor.HTTPHandler(userHandler))
-	app.Get("/", adaptor.HTTPHandler(templateHandler))
+	app.Get("/", adaptor.HTTPHandler(mainHandler))
 	app.Post("/register", adaptor.HTTPHandler(registerHandler))
 	app.Post("/login", adaptor.HTTPHandler(loginHandler))
 

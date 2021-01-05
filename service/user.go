@@ -2,21 +2,23 @@ package service
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"strings"
 )
 
 const MainTemplate = "main.gohtml"
-const LoginTemplate = "login.gohtml"
 
 type UserService interface {
 	HealthCheck() string
-	SendMainTemplateData() TemplateRender
+	SendMainTemplateData(token string) (TemplateRender, error)
 	Register(user, pass string) (string, error)
-	Login(user, pass string) TemplateRender
+	Login(user, pass string) (string, error)
 }
 
 type userService struct {
-	users map[string]string
+	users    map[string]string
+	sessions map[string]string
 }
 
 type TemplateRender struct {
@@ -32,21 +34,49 @@ type TemplateVariables struct {
 	Name         string
 	LoginMessage string
 	ErrorMessage error
+	Session      string
+	User         string
 }
 
 func NewUserService() UserService {
-	return &userService{users: make(map[string]string)}
+	return &userService{
+		users:    make(map[string]string),
+		sessions: make(map[string]string),
+	}
 }
 
 func (u userService) HealthCheck() string {
 	return "ok"
 }
 
-func (u userService) SendMainTemplateData() TemplateRender {
+func (u userService) SendMainTemplateData(token string) (TemplateRender, error) {
+	if strings.TrimSpace(token) == "" {
+		return TemplateRender{
+			Metadata:  TemplateMetadata{Name: MainTemplate},
+			Variables: TemplateVariables{},
+		}, nil
+	}
+
+	sessionID, err := ParseToken(token)
+	if err != nil {
+		return TemplateRender{
+			Metadata:  TemplateMetadata{Name: MainTemplate},
+			Variables: TemplateVariables{},
+		}, fmt.Errorf("error while parsing token: %w", err)
+	}
+
+	user, ok := u.sessions[sessionID]
+	if !ok {
+		return TemplateRender{
+			Metadata:  TemplateMetadata{Name: MainTemplate},
+			Variables: TemplateVariables{},
+		}, fmt.Errorf("session not registered")
+	}
+
 	return TemplateRender{
 		Metadata:  TemplateMetadata{Name: MainTemplate},
-		Variables: TemplateVariables{},
-	}
+		Variables: TemplateVariables{Session: token, User: user},
+	}, nil
 }
 
 func (u *userService) Register(user, pass string) (string, error) {
@@ -64,38 +94,22 @@ func (u *userService) Register(user, pass string) (string, error) {
 	return "REGISTER SUCCESSFUL", nil
 }
 
-func (u userService) Login(user, pass string) TemplateRender {
+func (u userService) Login(user, pass string) (string, error) {
 	storedPass, ok := u.users[user]
 	if !ok {
-		return TemplateRender{
-			Metadata: TemplateMetadata{Name: LoginTemplate},
-			Variables: TemplateVariables{
-				Name:         user,
-				LoginMessage: "LOGIN FAILED",
-				ErrorMessage: fmt.Errorf("user not registered"),
-			},
-		}
+		return "", fmt.Errorf("user not registered")
 	}
 
 	if err := u.checkPasswordHash(pass, storedPass); err != nil {
-		return TemplateRender{
-			Metadata: TemplateMetadata{Name: LoginTemplate},
-			Variables: TemplateVariables{
-				Name:         user,
-				LoginMessage: "LOGIN FAILED",
-				ErrorMessage: fmt.Errorf("erorr while checking passwords: %w", err),
-			},
-		}
+		return "", fmt.Errorf("error while checking passwords: %w", err)
 	}
 
-	return TemplateRender{
-		Metadata: TemplateMetadata{Name: LoginTemplate},
-		Variables: TemplateVariables{
-			Name:         user,
-			LoginMessage: "LOGIN SUCCESSFUL",
-			ErrorMessage: nil,
-		},
-	}
+	sessionID := uuid.New().String()
+	u.sessions[sessionID] = user
+
+	token := CreateToken(sessionID)
+
+	return token, nil
 }
 
 func (u userService) hashValue(v string) (string, error) {

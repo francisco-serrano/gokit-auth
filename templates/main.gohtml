@@ -10,6 +10,9 @@
 
 <h3>Login</h3>
 
+<div>Session Cookie {{.Session}}</div>
+<div>Username {{.User}}</div>
+
 <form action="/login" method="post">
     <input type="text" name="user"/>
     <input type="password" name="pass"/>
