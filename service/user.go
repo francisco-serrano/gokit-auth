@@ -17,8 +17,13 @@ type UserService interface {
 }
 
 type userService struct {
-	users    map[string]string
+	users    map[string]UserFields
 	sessions map[string]string
+}
+
+type UserFields struct {
+	Username       string
+	HashedPassword string
 }
 
 type TemplateRender struct {
@@ -40,7 +45,7 @@ type TemplateVariables struct {
 
 func NewUserService() UserService {
 	return &userService{
-		users:    make(map[string]string),
+		users:    make(map[string]UserFields),
 		sessions: make(map[string]string),
 	}
 }
@@ -89,18 +94,21 @@ func (u *userService) Register(user, pass string) (string, error) {
 		return "", fmt.Errorf("error while hashing pass: %w", err)
 	}
 
-	u.users[user] = hashedPass
+	u.users[user] = UserFields{
+		Username:       user,
+		HashedPassword: hashedPass,
+	}
 
 	return "REGISTER SUCCESSFUL", nil
 }
 
 func (u userService) Login(user, pass string) (string, error) {
-	storedPass, ok := u.users[user]
+	userFields, ok := u.users[user]
 	if !ok {
 		return "", fmt.Errorf("user not registered")
 	}
 
-	if err := u.checkPasswordHash(pass, storedPass); err != nil {
+	if err := u.checkPasswordHash(pass, userFields.HashedPassword); err != nil {
 		return "", fmt.Errorf("error while checking passwords: %w", err)
 	}
 
