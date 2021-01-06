@@ -36,11 +36,18 @@ func main() {
 		transport.SetLoginResponse,
 	)
 
+	logoutHandler := http.NewServer(
+		transport.MakeLogoutEndpoint(svc),
+		transport.DecodeRequest,
+		transport.SetLogoutResponse,
+	)
+
 	app := fiber.New()
 	app.Get("/health", adaptor.HTTPHandler(userHandler))
 	app.Get("/", adaptor.HTTPHandler(mainHandler))
 	app.Post("/register", adaptor.HTTPHandler(registerHandler))
 	app.Post("/login", adaptor.HTTPHandler(loginHandler))
+	app.Post("/logout", adaptor.HTTPHandler(logoutHandler))
 
 	if err := app.Listen(":8080"); err != nil {
 		log.Fatal(err)

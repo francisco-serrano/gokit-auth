@@ -14,6 +14,7 @@ type UserService interface {
 	SendMainTemplateData(token string) (TemplateRender, error)
 	Register(user, pass string) (string, error)
 	Login(user, pass string) (string, error)
+	Logout(token string) error
 }
 
 type userService struct {
@@ -115,9 +116,27 @@ func (u userService) Login(user, pass string) (string, error) {
 	sessionID := uuid.New().String()
 	u.sessions[sessionID] = user
 
-	token := CreateToken(sessionID)
+	token, err := CreateToken(sessionID)
+	if err != nil {
+		return "", fmt.Errorf("error while creating token: %w", err)
+	}
 
 	return token, nil
+}
+
+func (u userService) Logout(token string) error {
+	sessionID, err := ParseToken(token)
+	if err != nil {
+		return fmt.Errorf("error while parsing token: %w", err)
+	}
+
+	if _, ok := u.sessions[sessionID]; !ok {
+		return fmt.Errorf("session not registered during logout")
+	}
+
+	delete(u.sessions, sessionID)
+
+	return nil
 }
 
 func (u userService) hashValue(v string) (string, error) {

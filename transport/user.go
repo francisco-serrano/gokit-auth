@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type healthCheckResponse struct {
@@ -78,6 +79,21 @@ func MakeLoginEndpoint(svc service.UserService) endpoint.Endpoint {
 		}
 
 		return token, nil
+	}
+}
+
+func MakeLogoutEndpoint(svc service.UserService) endpoint.Endpoint {
+	return func(_ context.Context, request interface{}) (interface{}, error) {
+		c, ok := request.(*http.Cookie)
+		if !ok {
+			return nil, fmt.Errorf("could not obtain cookie from request: %T", request)
+		}
+
+		if err := svc.Logout(c.Value); err != nil {
+			log.Print(fmt.Errorf("error while logging out: %w", err))
+		}
+
+		return nil, nil
 	}
 }
 
@@ -156,6 +172,23 @@ func SetLoginResponse(_ context.Context, w http.ResponseWriter, response interfa
 	http.SetCookie(w, &http.Cookie{
 		Name:  "session",
 		Value: token,
+	})
+
+	r, err := http.NewRequest(http.MethodGet, "/", nil)
+	if err != nil {
+		return fmt.Errorf("error while creating request: %w", err)
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+
+	return nil
+}
+
+func SetLogoutResponse(_ context.Context, w http.ResponseWriter, _ interface{}) error {
+	http.SetCookie(w, &http.Cookie{
+		Name:    "session",
+		Value:   "",
+		Expires: time.Unix(0, 0),
 	})
 
 	r, err := http.NewRequest(http.MethodGet, "/", nil)
